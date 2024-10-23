@@ -40,6 +40,7 @@
 #include "message_overlay.h"
 #include "font.h"
 #include "baseui.h"
+#include "multiplayer/chatui.h"
 
 // fmt 7 has renamed the namespace
 #if FMT_VERSION < 70000
@@ -188,11 +189,6 @@ static void WriteLog(LogLevel lvl, std::string const& msg, Color const& c = Colo
 
 	// output to custom logger or terminal
 	log_cb(lvl, msg, log_cb_udata);
-
-	// output to overlay
-	if (lvl != LogLevel::Debug && lvl != LogLevel::Error) {
-		Graphics::GetMessageOverlay().AddMessage(msg, c);
-	}
 }
 
 static void HandleErrorOutput(const std::string& err) {
@@ -320,16 +316,22 @@ void Output::ErrorStr(std::string const& err) {
 	exit(Player::exit_code);
 }
 
-void Output::WarningStr(std::string const& warn) {
+void Output::WarningStr(std::string const& warn, bool no_chat) {
 	if (log_level < LogLevel::Warning) {
 		return;
+	}
+	if (!no_chat && !Player::exit_flag) {
+		CUI().GotSystemMessage("W: " + warn);
 	}
 	WriteLog(LogLevel::Warning, warn, Color(255, 255, 0, 255));
 }
 
-void Output::InfoStr(std::string const& msg) {
+void Output::InfoStr(std::string const& msg, bool no_chat) {
 	if (log_level < LogLevel::Info) {
 		return;
+	}
+	if (!no_chat && !Player::exit_flag) {
+		CUI().GotSystemMessage("I: " + msg);
 	}
 	WriteLog(LogLevel::Info, msg, Color(255, 255, 255, 255));
 }

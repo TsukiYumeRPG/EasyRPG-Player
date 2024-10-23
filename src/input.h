@@ -330,6 +330,15 @@ namespace Input {
 	/** All cardinal directions state. */
 	extern int dir8;
 
+	extern bool game_focused;
+	bool IsGameFocused();
+	void SetGameFocus(bool focused);
+	bool IsExternalPressed(InputButton button);
+	bool IsExternalTriggered(InputButton button);
+	bool IsExternalRepeated(InputButton button);
+	bool IsExternalReleased(InputButton button);
+	std::string& GetExternalTextInput();
+
 	bool IsWaitingInput();
 	void WaitInput(bool val);
 }

@@ -72,6 +72,7 @@
       image-rendering: pixelated;
       image-rendering: crisp-edges;
       transform: translate(-50%, -50%);
+      outline: none;
     }
 
     img#canvas {
@@ -118,9 +119,38 @@
     #apad > *:not(.active) {
       opacity: 0.4;
     }
+
+    #buttons {
+      position: fixed;
+      top: 3rem;
+      right: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      width: calc((var(--controls-size) / 2 + (0.5rem * 2)) * 2);
+    }
+    #buttons > * {
+      padding: 0.5rem;
+    }
+    #buttons > *:not(.active) {
+      opacity: 0.4;
+    }
+    #buttons svg {
+      width: calc(var(--controls-size) / 2);
+      height: calc(var(--controls-size) / 2);
+    }
   </style>
 </head>
 <body>
+
+  <!--
+    Icons:
+      https://iconify.design
+      https://github.com/iconoir-icons/iconoir
+    Tools:
+      https://benboba.github.io/svg-slim-web
+  -->
+
   <div id="controls">
     <button id="controls-fullscreen" class="unselectable">
       <svg viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" width="25" height="25"><path d="M13.5 13.5H10m3.5 0V10m0 3.5l-4-4m.5-8h3.5m0 0V5m0-3.5l-4 4M5 1.5H1.5m0 0V5m0-3.5l4 4m-4 4.5v3.5m0 0H5m-3.5 0l4-4" stroke="currentColor"></path></svg>
@@ -131,6 +161,21 @@
 
   <div id="viewport">
     <canvas id="canvas" tabindex="-1" class="unselectable"></canvas>
+
+    <div id="buttons" class="unselectable">
+      <div id="buttons-toggle-notifications" data-key="F3">
+        <!-- iconoir/bell v7.7.0 -->
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m18,8.4c0-1.7-.63-3.33-1.76-4.53C15.12,2.67,13.59,2,12,2s-3.12.67-4.24,1.87C6.63,5.07,6,6.7,6,8.4,6,15.87,3,18,3,18h18s-3-2.13-3-9.6zM13.73,21c-.18.3-.43.55-.73.73-.3.17-.65.27-1,.27s-.69-.09-1-.27c-.3-.17-.56-.43-.73-.73" stroke="currentColor"/></svg>
+      </div>
+      <div id="buttons-toggle-chat" data-key="Tab">
+        <!-- iconoir/edit-pencil v7.7.0 -->
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m14.36,5.65,1.48-1.48c.78-.78,2.05-.78,2.83,0l1.41,1.41c.78.78.78,2.05,0,2.83L18.6,9.89m-4.24-4.24-9.61,9.62c-.33.33-.54.77-.58,1.24l-.24,2.74c-.05.62.46,1.14,1.08,1.08l2.74-.24c.47-.04.91-.25,1.24-.58l9.62-9.62m-4.24-4.24,4.24,4.24" stroke="currentColor"/></svg>
+      </div>
+      <div id="buttons-settings" data-key="F1">
+        <!-- iconoir/settings v7.7.0 -->
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="m12,15c1.66,0,3-1.34,3-3s-1.34-3-3-3-3,1.34-3,3,1.34,3,3,3zm7.62-4.6-1.1-2.65L20,6,18,4,16.26,5.48l-2.7-1.11L12.94,2h-1.96l-.63,2.4L7.7,5.52,6,4,4,6,5.45,7.79,4.37,10.45,2,11v2l2.4.66,1.11,2.64L4,18l2,2,1.79-1.46,2.61,1.07L11,22h2l.6-2.39,2.65-1.1C16.7,18.83,18,20,18,20l2-2-1.48-1.75,1.1-2.65,2.39-.62L22,11l-2.38-.6z" stroke="currentColor"/></svg>
+      </div>
+    </div>
 
     <div id="dpad" class="unselectable">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72">
@@ -148,7 +193,7 @@
     </div>
   </div>
 
-{{{ SCRIPT }}}
+<div id="scriptTagText"><!--{{{ SCRIPT }}}--></div>
 
 <script>
 const hasTouchscreen = window.matchMedia('(hover: none), (pointer: coarse)').matches;
@@ -160,23 +205,49 @@ let easyrpgPlayer;
 let lastTouchedId;
 
 // Launch the Player and configure it
-window.addEventListener('load', (event) => {
-    createEasyRpgPlayer({
-      game: undefined,
-      saveFs: undefined
-    }).then(function(Module) {
-      // Module is ready
-      easyrpgPlayer = Module;
-      easyrpgPlayer.initApi();
-      canvas.focus();
+function launch(done) {
+  createEasyRpgPlayer({
+    game: undefined,
+    saveFs: undefined
+  }).then(function(Module) {
+    // Module is ready
+    easyrpgPlayer = Module;
+    easyrpgPlayer.initApi();
+    focusPlayer();
 
-      // Custom code here
-    });
-});
+    // Custom code here
+    const textInputHelper = TextInputHelper(Module);
+    Module.api_private.startTextInput_js = textInputHelper.startTextInput;
+    Module.api_private.stopTextInput_js = textInputHelper.stopTextInput;
+    Module.api_private.setTextInputRect_js = textInputHelper.setTextInputRect;
+    Module.api_private.getClipboardText_js = textInputHelper.getClipboardText;
+    Module.api_private.setClipboardText_js = textInputHelper.setClipboardText;
 
-// Make EasyRPG player embeddable
-canvas.addEventListener('mouseenter', () => canvas.focus());
-canvas.addEventListener('click', () => canvas.focus());
+    // Requires interaction to take effect
+    window.onbeforeunload = () => 'Please confirm before closing'
+
+    done();
+  });
+}
+
+/**
+ * Make EasyRPG player embeddable (focusable)
+ *
+ * @param: leave blank to use the previous element,
+ *   pass `null` to restore to default
+ */
+let playerFocusElement = null;
+function focusPlayer(element) {
+  if (element !== undefined)
+    playerFocusElement = element;
+  if (playerFocusElement) {
+    playerFocusElement.focus();
+    return;
+  }
+  canvas.focus();
+}
+canvas.addEventListener('mouseenter', () => focusPlayer());
+canvas.addEventListener('click', () => focusPlayer());
 
 // Handle clicking on the fullscreen button
 document.querySelector('#controls-fullscreen').addEventListener('click', () => {
@@ -204,11 +275,14 @@ function simulateKeyboardEvent(eventType, key) {
  *
  * @param {string} key Key to simulate
  */
-function simulateKeyboardInput(key) {
+async function simulateKeyboardInput(key) {
   simulateKeyboardEvent('keydown', key);
-  window.setTimeout(() => {
-    simulateKeyboardEvent('keyup', key);
-  }, 100);
+  return new Promise(resolve => {
+    setTimeout(() => {
+      simulateKeyboardEvent('keyup', key);
+      resolve();
+    }, 100);
+  });
 }
 
 /**
@@ -321,12 +395,12 @@ window.addEventListener('gamepaddisconnected', function(e) {
 
 function updateTouchControlsVisibility() {
   if (hasTouchscreen && Object.keys(gamepads).length === 0) {
-    for (const elem of document.querySelectorAll('#dpad, #apad')) {
+    for (const elem of document.querySelectorAll('#dpad, #apad, #buttons')) {
       elem.style.display = '';
     }
   } else {
     // If we don't have a touch screen, OR any gamepads are connected...
-    for (const elem of document.querySelectorAll('#dpad, #apad')) {
+    for (const elem of document.querySelectorAll('#dpad, #apad, #buttons')) {
       // Hide the touch controls
       elem.style.display = 'none';
     }
@@ -341,7 +415,7 @@ if (hasTouchscreen) {
   }
 } else {
   // Prevent scrolling when pressing specific keys
-  window.addEventListener('keydown', event => {
+  canvas.addEventListener('keydown', event => {
     if (preventNativeKeys.includes(event.key)) {
       event.preventDefault();
     }
@@ -358,6 +432,148 @@ if (hasTouchscreen) {
 }
 
 updateTouchControlsVisibility();
+
+/**
+ * IME & Clipboard support
+ *  IME: Use the events of the proxy=<input> element instead of SDL's IME
+ * References: Led's implementation
+ */
+function TextInputHelper(Module) {
+  const proxy = document.createElement('input');
+  for (const [prop, val] of [['position', 'absolute'],
+      ['opacity', 0], ['width', '0px'], ['height', '0px']]) {
+    proxy.style[prop] = val;
+  }
+  proxy.id = 'proxy';
+  canvas.insertAdjacentElement('beforebegin', proxy);
+
+  // Forward events. You can still interact with the Player
+  //  even when the focus is on the html input
+  let proxyBlocked = false;
+  let isPressingControl = false;
+  for (const eventType of ['keydown', 'keypress', 'keyup',
+      'mousedown', 'mouseenter', 'mouseleave', 'mousemove', 'wheel',
+      'touchcancel', 'touchend', 'touchmove', 'touchstart',
+      'webglcontextlost', 'contextmenu']) {
+    proxy.addEventListener(eventType, event => {
+      if (proxyBlocked && event.type !== 'keyup')
+        return;
+      if (event.type === 'keydown' && event.key === 'Control')
+        isPressingControl = true;
+      if (event.type === 'keyup' && event.key === 'Control')
+        isPressingControl = false;
+      // Prevent default copy-paste event
+      if (isPressingControl &&
+          (event.code === 'KeyC' || event.code === 'KeyV'))
+        return;
+      canvas.dispatchEvent(new event.constructor(event.type, event));
+    });
+  }
+
+  proxy.addEventListener("keydown", event => {
+    // Prevent tabbing out
+    if (event.key === 'Tab') {
+      event.preventDefault();
+    }
+  });
+
+  // Ignore temporary text of IME composition
+  let isComposing = false;
+  function handleInput() {
+    Module.api.updateTextInputBuffer(proxy.value);
+    proxy.value = "";
+  }
+  proxy.addEventListener('compositionstart', () => {
+    isComposing = true;
+    proxyBlocked = true;
+  });
+  proxy.addEventListener('compositionend', () => {
+    isComposing = false;
+    proxyBlocked = false;
+    handleInput();
+  });
+  proxy.addEventListener('input', () => {
+    if (!isComposing && proxy.value !== '') {
+      handleInput();
+    }
+  });
+
+  // Clipboard
+  let clipboardText = "";
+  proxy.addEventListener('copy', async (event) => {
+    event.preventDefault();
+    await simulateKeyboardInput('KeyC'); // setClipboardText
+    navigator.clipboard.writeText(clipboardText);
+  });
+  proxy.addEventListener('paste', event => {
+    event.preventDefault();
+    clipboardText = event.clipboardData.getData('text/plain');
+    simulateKeyboardInput('KeyV'); // getClipboardText
+  });
+
+  const methods = {
+    startTextInput: () => { focusPlayer(proxy); },
+    stopTextInput: () => { focusPlayer(null); },
+    setTextInputRect: (x, y) => {
+      proxy.style.left = `${x}px`;
+      proxy.style.top = `${y}px`;
+    },
+    getClipboardText: () => { return clipboardText; }, // paste
+    setClipboardText: text => { clipboardText = text; }, // copy
+  };
+
+  return methods;
+}
+
+(function(done) {
+  const progressBar = document.createElement('progress');
+  progressBar.style.cssText = "position: absolute; top: 0; left: 0; width: 4rem;";
+  progressBar.max = 100;
+  document.body.append(progressBar);
+
+  // https://stackoverflow.com/questions/10420352/converting-file-size-in-bytes-to-human-readable-string/14919494#14919494
+  window.bytesToPercent = function(bytes) {
+    const thresh = 100;
+    if (bytes < thresh) return bytes;
+    let u = -1;
+    do {
+      bytes /= thresh;
+      ++u;
+    } while (bytes >= thresh && u < 10);
+    return bytes * 10 % 99;
+  }
+
+  // https://stackoverflow.com/questions/65491241/get-webassembly-instantiatestreaming-progress
+  async function fetchWithProgress(path) {
+    const response = await oldFetch(path);
+    const contentLength = response.headers.get("Content-Length");
+    const total = parseInt(contentLength, 10);
+    let bytesLoaded = 0;
+    return new Response(response.body.pipeThrough(new TransformStream({
+      transform(chunk, controller) {
+        bytesLoaded += chunk.byteLength;
+        if (contentLength !== null) {
+          progressBar.value = bytesLoaded / total * 100;
+        } else {
+          progressBar.value = bytesToPercent(bytesLoaded);
+        }
+        controller.enqueue(chunk);
+      }
+    })), response);
+  }
+  const oldFetch = window.fetch;
+  window.fetch = fetchWithProgress;
+
+  // load emscripten script
+  const scriptTagDiv = document.createElement('div');
+  scriptTagDiv.innerHTML = scriptTagText.childNodes[0].nodeValue;
+  fetch(scriptTagDiv.children[0].src).then(response => response.text()).then(text => {
+    const script = document.createElement('script');
+    script.textContent = text;
+    document.body.appendChild(script);
+    done(() => progressBar.style.display = 'none');
+  });
+})(launch);
 </script>
 
 </body>

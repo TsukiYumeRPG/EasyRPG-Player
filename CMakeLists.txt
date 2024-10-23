@@ -25,6 +25,13 @@ set(CMAKE_CXX_EXTENSIONS ON)
 # Must be at global scope, otherwise breaks -DPLAYER_BUILD_LIBLCF (see CMP0077)
 option(BUILD_SHARED_LIBS "Build shared easyrpg_libretro core" ON)
 
+option(BUILD_CLIENT "Build client" ON)
+option(BUILD_SERVER "Build server" OFF)
+
+if(NOT BUILD_CLIENT AND NOT BUILD_SERVER)
+	set(BUILD_CLIENT on)
+endif()
+
 option(CMAKE_FIND_PACKAGE_PREFER_CONFIG "Prefer config files over bundled FindXXX files. Set this to OFF when configuration fails and report a bug." ON)
 
 # Source Files
@@ -358,6 +365,10 @@ add_library(${PROJECT_NAME} OBJECT
 	src/std_clock.h
 	src/string_view.cpp
 	src/string_view.h
+	src/statustext_overlay.cpp
+	src/statustext_overlay.h
+	src/debugtext_overlay.cpp
+	src/debugtext_overlay.h
 	src/system.h
 	src/teleport_target.h
 	src/text.cpp
@@ -473,6 +484,61 @@ add_library(${PROJECT_NAME} OBJECT
 #	src/platform/opendingux/opendingux_input_buttons.cpp
 #	src/platform/psp/psp_input_buttons.cpp
 
+target_sources(${PROJECT_NAME} PRIVATE
+	src/multiplayer/connection.cpp
+	src/multiplayer/connection.h
+	src/multiplayer/client_connection.cpp
+	src/multiplayer/client_connection.h
+	src/multiplayer/game_multiplayer.h
+	src/multiplayer/game_playerother.h
+	src/multiplayer/messages.h
+	src/multiplayer/packet.cpp
+	src/multiplayer/packet.h
+	src/multiplayer/game_multiplayer.cpp
+	src/multiplayer/nametag.cpp
+	src/multiplayer/nametag.h
+	src/multiplayer/chatui.cpp
+	src/multiplayer/chatui.h
+	src/multiplayer/playerother.cpp
+	src/multiplayer/playerother.h
+	src/multiplayer/output_mt.cpp
+	src/multiplayer/output_mt.h
+	src/multiplayer/util/strfnd.h
+	src/multiplayer/util/serialize.cpp
+	src/multiplayer/util/serialize.h
+	src/multiplayer/util/hexdump.cpp
+	src/multiplayer/util/hexdump.h
+	src/multiplayer/util/crypto.cpp
+	src/multiplayer/util/crypto.h
+	src/multiplayer/util/base64.cpp
+	src/multiplayer/util/base64.h
+)
+
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+	target_sources(${PROJECT_NAME} PRIVATE
+		src/multiplayer/server.cpp
+		src/multiplayer/server.h
+		src/multiplayer/socket.cpp
+		src/multiplayer/socket.h
+		src/multiplayer/websocket.cpp
+		src/multiplayer/websocket.h
+		src/multiplayer/util/sha1.cpp
+		src/multiplayer/util/sha1.h
+	)
+endif()
+
+add_library(${PROJECT_NAME}_server OBJECT
+	src/multiplayer/connection.cpp
+	src/multiplayer/socket.cpp
+	src/multiplayer/packet.cpp
+	src/multiplayer/websocket.cpp
+	src/multiplayer/output_mt.cpp
+	src/multiplayer/util/serialize.cpp
+	src/multiplayer/util/hexdump.cpp
+	src/multiplayer/util/base64.cpp
+	src/multiplayer/util/sha1.cpp
+)
+
 # Include directories
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
@@ -561,6 +627,15 @@ else()
 endif()
 set(PLAYER_BUILD_EXECUTABLE ON)
 set(PLAYER_TEST_LIBRARIES ${PROJECT_NAME})
+
+option(PLAYER_MULTIPLAYER "Enable Multiplayer." OFF)
+
+if(NOT BUILD_CLIENT AND BUILD_SERVER)
+	set(PLAYER_TARGET_PLATFORM OFF)
+	set(PLAYER_BUILD_EXECUTABLE OFF)
+	set(PLAYER_AUDIO_BACKEND OFF)
+	set(PLAYER_MULTIPLAYER ON)
+endif()
 
 if(ANDROID AND PLAYER_GRADLE_BUILD)
 	# Build invoked by Gradle
@@ -693,8 +768,6 @@ elseif(${PLAYER_TARGET_PLATFORM} STREQUAL "wii")
 		src/platform/sdl/axis.h
 		src/platform/sdl/sdl_ui.cpp
 		src/platform/sdl/sdl_ui.h)
-else()
-	message(FATAL_ERROR "Invalid target platform")
 endif()
 
 # Shared by homebrew platforms
@@ -807,6 +880,8 @@ set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO")
 set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
 set(CMAKE_XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "org.easyrpg.player")
 
+if(BUILD_CLIENT) # BUILD_CLIENT : liblcf
+
 # liblcf
 option(PLAYER_BUILD_LIBLCF "Instead of detecting liblcf, clone liblcf into lib/liblcf and build it along with the Player. This is convenient for development." OFF)
 set(PLAYER_BUILD_LIBLCF_GIT "https://github.com/EasyRPG/liblcf.git" CACHE STRING "Git repository of liblcf to clone. Requires PLAYER_BUILD_LIBLCF=ON.")
@@ -837,6 +912,60 @@ else()
 	player_find_package(NAME liblcf VERSION 0.8
 		TARGET liblcf::liblcf
 		REQUIRED)
+endif()
+
+endif() # BUILD_CLIENT : liblcf
+
+if(PLAYER_MULTIPLAYER AND NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+	set(LIBUV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/libuv")
+	if(NOT EXISTS ${LIBUV_PATH})
+		find_package(Git REQUIRED)
+		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
+			"-c" "advice.detachedHead=false" "--branch"
+			"v1.44.2"
+			"https://github.com/libuv/libuv"
+			"${LIBUV_PATH}")
+		include(Patch)
+		execute_process(COMMAND ${PATCH_EXECUTABLE} -p1 -d "${LIBUV_PATH}"
+			--input=${CMAKE_CURRENT_SOURCE_DIR}/patches/libuv.patch )
+	endif()
+	function(add_libuv)
+		set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+		set(BUILD_TESTING OFF)
+		set(LIBUV_BUILD_SHARED OFF)
+		add_subdirectory(${LIBUV_PATH})
+	endfunction()
+	add_libuv()
+	target_link_libraries(${PROJECT_NAME} uv_a)
+endif()
+
+if(BUILD_CLIENT) # BUILD_CLIENT
+
+if(PLAYER_MULTIPLAYER)
+	set(LIBSODIUM_CMAKE_GIT "https://github.com/robinlinden/libsodium-cmake" CACHE STRING "")
+	set(LIBSODIUM_CMAKE_BRANCH "master" CACHE STRING "")
+	set(LIBSODIUM_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/lib/libsodium-cmake")
+	set(LIBSODIUM_SOURCES "${LIBSODIUM_CMAKE_PATH}/libsodium")
+	if(NOT EXISTS ${LIBSODIUM_CMAKE_PATH})
+		find_package(Git REQUIRED)
+		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
+			"-c" "advice.detachedHead=false" "--branch"
+			"${LIBSODIUM_CMAKE_BRANCH}"
+			"${LIBSODIUM_CMAKE_GIT}"
+			"${LIBSODIUM_CMAKE_PATH}")
+		execute_process(COMMAND ${GIT_EXECUTABLE} clone "--depth=1"
+			"-c" "advice.detachedHead=false" "--branch"
+			"1.0.18"
+			"https://github.com/jedisct1/libsodium"
+			"${LIBSODIUM_SOURCES}")
+	endif()
+	function(add_libsodium)
+		set(BUILD_SHARED_LIBS OFF)
+		set(SODIUM_DISABLE_TESTS ON)
+		add_subdirectory(${LIBSODIUM_CMAKE_PATH})
+	endfunction()
+	add_libsodium()
+	target_link_libraries(${PROJECT_NAME} sodium)
 endif()
 
 # Detect all required libraries
@@ -1138,13 +1267,15 @@ if(${PLAYER_BUILD_EXECUTABLE} AND ${PLAYER_TARGET_PLATFORM} MATCHES "^SDL[12]$" 
 		# Prevent Emscripten from pulling in bundled SDL headers that break the build
 		target_compile_options(${PROJECT_NAME} PUBLIC "-sUSE_SDL=0")
 
+		set(PLAYER_JS_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-library.js")
 		set(PLAYER_JS_PREJS "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-pre.js")
 		set(PLAYER_JS_POSTJS "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-post.js")
 		set(PLAYER_JS_SHELL "${CMAKE_CURRENT_SOURCE_DIR}/resources/emscripten/emscripten-shell.html")
 
 		set_property(TARGET ${EXE_NAME} PROPERTY LINK_FLAGS
 			"-sALLOW_MEMORY_GROWTH -sMINIFY_HTML=0 -sMODULARIZE -sEXPORT_NAME=createEasyRpgPlayer \
-			 -sEXIT_RUNTIME --bind --pre-js ${PLAYER_JS_PREJS} --post-js ${PLAYER_JS_POSTJS} \
+			 -sEXIT_RUNTIME --bind --js-library ${PLAYER_JS_LIBRARY} \
+			 --pre-js ${PLAYER_JS_PREJS} --post-js ${PLAYER_JS_POSTJS} \
 			 -sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=['$autoResumeAudioContext','$dynCall'] \
 			 -sEXPORTED_RUNTIME_METHODS=['FS'] \
 			 -sEXPORTED_FUNCTIONS=_main,_malloc,_free")
@@ -1164,6 +1295,7 @@ if(${PLAYER_BUILD_EXECUTABLE} AND ${PLAYER_TARGET_PLATFORM} MATCHES "^SDL[12]$" 
 				src/platform/emscripten/interface.h)
 
 		target_link_libraries(${EXE_NAME} "idbfs.js")
+		target_link_libraries(${EXE_NAME} "websocket.js")
 
 		set_target_properties(${EXE_NAME} PROPERTIES OUTPUT_NAME "${PLAYER_JS_OUTPUT_NAME}")
 	endif()
@@ -1355,6 +1487,29 @@ else() # library
 	else()
 		message(FATAL_ERROR "Unsupported library target platform ${PLAYER_TARGET_PLATFORM}")
 	endif()
+endif()
+
+if (NOT BUILD_SERVER)
+	set_target_properties(${PROJECT_NAME}_server PROPERTIES EXCLUDE_FROM_ALL ON)
+endif()
+
+endif() # BUILD_CLIENT
+
+if(BUILD_SERVER)
+	if (NOT BUILD_CLIENT)
+		set_target_properties(${PROJECT_NAME} PROPERTIES EXCLUDE_FROM_ALL ON)
+	endif()
+
+	player_find_package(NAME fmt TARGET fmt::fmt REQUIRED)
+	target_link_libraries(${PROJECT_NAME}_server uv_a)
+
+	add_executable(${PROJECT_NAME}_server_exe "src/multiplayer/server.cpp")
+	set_target_properties(${PROJECT_NAME}_server_exe PROPERTIES OUTPUT_NAME "easyrpg-player-server")
+	target_link_libraries(${PROJECT_NAME}_server_exe ${PROJECT_NAME}_server)
+	install(TARGETS ${PROJECT_NAME}_server_exe RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+	target_compile_definitions(${PROJECT_NAME}_server PRIVATE SERVER)
+	target_compile_definitions(${PROJECT_NAME}_server_exe PRIVATE SERVER)
 endif()
 
 # manpage

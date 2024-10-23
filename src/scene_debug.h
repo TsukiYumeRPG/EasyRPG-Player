@@ -73,6 +73,7 @@ public:
 		eString,
 		eInterpreter,
 		eOpenMenu,
+		eChat,
 		eLastMainMenuOption,
 	};
 
@@ -135,6 +136,7 @@ private:
 	void DoCallMapEvent();
 	void DoCallBattleEvent();
 	void DoOpenMenu();
+	void DoChat();
 
 	const int choice_window_width = 120;
 

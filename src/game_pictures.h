@@ -86,6 +86,7 @@ public:
 	void Move(int id, const MoveParams& params);
 	void Erase(int id);
 	void EraseAll();
+	void EraseRange(int start, int end);
 
 	void Update(bool is_battle);
 

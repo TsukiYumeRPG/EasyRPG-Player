@@ -91,6 +91,19 @@ public:
 	BitmapRef CaptureScreen();
 
 	/**
+	 * Clipboard text content.
+	 */
+	virtual std::string GetClipboardText() { return ""; };
+	virtual void SetClipboardText(std::string text) {};
+
+	/**
+	 * IME support.
+	 */
+	virtual void SetTextInputRect(int x, int y, int w = 0, int h = 0) {};
+	virtual void StartTextInput() {};
+	virtual void StopTextInput() {};
+
+	/**
 	 * Sets display title.
 	 *
 	 * @param title title string.
@@ -188,6 +201,12 @@ public:
 	 * @returns vector with the all keys pressed states.
 	 */
 	KeyStatus& GetKeyStates();
+
+	std::string FetchTextInputBuffer();
+
+#ifdef EMSCRIPTEN
+	void UpdateTextInputBuffer(std::string_view text);
+#endif
 
 	/** @return true if the display manages the framerate */
 	bool IsFrameRateSynchronized() const;
@@ -290,6 +309,9 @@ protected:
 
 	KeyStatus keys;
 
+	/** TEXTINPUT text */
+	std::string text_input_buffer;
+
 	/** Surface used for zoom. */
 	BitmapRef main_surface;
 
@@ -350,6 +372,18 @@ inline void BaseUi::SetIsFullscreen(bool fs) {
 inline BaseUi::KeyStatus& BaseUi::GetKeyStates() {
 	return keys;
 }
+
+inline std::string BaseUi::FetchTextInputBuffer() {
+	std::string val = text_input_buffer;
+	text_input_buffer = ""; // reset buffer when fetching
+	return val;
+}
+
+#ifdef EMSCRIPTEN
+inline void BaseUi::UpdateTextInputBuffer(std::string_view text) {
+	text_input_buffer = text;
+}
+#endif
 
 inline BitmapRef const& BaseUi::GetDisplaySurface() const {
 	return main_surface;
@@ -423,10 +457,12 @@ inline Game_Clock::duration BaseUi::GetFrameLimit() const {
 	return IsFrameRateSynchronized() ? Game_Clock::duration(0) : frame_limit;
 }
 
+#ifndef EMSCRIPTEN
 inline void BaseUi::SetFrameLimit(int fps_limit) {
 	vcfg.fps_limit.Set(fps_limit);
 
 	frame_limit = (fps_limit == 0 ? Game_Clock::duration(0) : Game_Clock::TimeStepFromFps(fps_limit));
 }
+#endif
 
 #endif

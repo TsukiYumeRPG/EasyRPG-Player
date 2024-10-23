@@ -40,7 +40,8 @@ public:
 	enum Type {
 		Event,
 		Player,
-		Vehicle
+		Vehicle,
+		PlayerOther
 	};
 
 	static StringView TypeToStr(Type t);
@@ -808,7 +809,7 @@ public:
 	 *
 	 * @return opacity (0 = Invisible, 255 = opaque)
 	 */
-	int GetOpacity() const;
+	virtual int GetOpacity() const;
 
 	/**
 	 * @return RPG_RT transparency
@@ -1015,10 +1016,6 @@ inline int Game_Character::GetFacing() const {
 	return data()->facing;
 }
 
-inline void Game_Character::SetFacing(int new_facing) {
-	data()->facing = new_facing;
-}
-
 inline bool Game_Character::IsFacingLocked() const {
 	return data()->lock_facing;
 }
@@ -1041,10 +1038,6 @@ inline bool Game_Character::IsOverlapForbidden() const {
 
 inline int Game_Character::GetMoveSpeed() const {
 	return data()->move_speed;
-}
-
-inline void Game_Character::SetMoveSpeed(int speed) {
-	data()->move_speed = speed;
 }
 
 inline int Game_Character::GetMoveFrequency() const {
@@ -1097,11 +1090,6 @@ inline void Game_Character::SetMoveFailureCount(int count) {
 
 inline const std::string& Game_Character::GetSpriteName() const {
 	return data()->sprite_name;
-}
-
-inline void Game_Character::SetSpriteGraphic(std::string sprite_name, int index) {
-	data()->sprite_name = std::move(sprite_name);
-	data()->sprite_id = index;
 }
 
 inline void Game_Character::MoveRouteSetSpriteGraphic(std::string sprite_name, int index) {
@@ -1406,6 +1394,7 @@ inline StringView Game_Character::TypeToStr(Game_Character::Type type) {
 		case Player: return "Player";
 		case Vehicle: return "Vehicle";
 		case Event: return "Event";
+		case PlayerOther: return "PlayerOther";
 	}
 	return "UnknownCharacter";
 }

@@ -381,6 +381,28 @@ void Game_Config::LoadFromArgs(CmdlineParser& cp) {
 			}
 			continue;
 		}
+		if (cp.ParseNext(arg, 1, "--bind-address")) {
+			std::string svalue;
+			if (arg.ParseValue(0, svalue)) {
+				multiplayer.server_bind_address.Set(std::move(svalue));
+			}
+			continue;
+		}
+		if (cp.ParseNext(arg, 1, "--bind-address-2")) {
+			std::string svalue;
+			if (arg.ParseValue(0, svalue)) {
+				multiplayer.server_bind_address_2.Set(std::move(svalue));
+			}
+			continue;
+		}
+		if (cp.ParseNext(arg, 0, "--no-heartbeats")) {
+			multiplayer.no_heartbeats.Set(true);
+			continue;
+		}
+		if (cp.ParseNext(arg, 0, "--no-pause-when-focus-lost")) {
+			video.no_pause_when_focus_lost.Set(true);
+			continue;
+		}
 		if (cp.ParseNext(arg, 1, "--soundfont")) {
 			if (arg.NumValues() > 0) {
 				audio.soundfont.Set(arg.Value(0));
@@ -521,6 +543,23 @@ void Game_Config::LoadFromStream(Filesystem_Stream::InputStream& is) {
 	player.font1_size.FromIni(ini);
 	player.font2.FromIni(ini);
 	player.font2_size.FromIni(ini);
+
+	/** MULTIPLAYER SECTION */
+	multiplayer.server_auto_start.FromIni(ini);
+	multiplayer.server_bind_address.FromIni(ini);
+	multiplayer.server_bind_address_2.FromIni(ini);
+	multiplayer.server_max_users.FromIni(ini);
+	multiplayer.client_auto_connect.FromIni(ini);
+	multiplayer.client_remote_address.FromIni(ini);
+	multiplayer.client_socks5_address.FromIni(ini);
+	multiplayer.client_crypt_key.FromIni(ini);
+	multiplayer.client_chat_notifications.FromIni(ini);
+	multiplayer.client_chat_immersive_mode.FromIni(ini);
+	multiplayer.client_chat_splitscreen_mode.FromIni(ini);
+	multiplayer.client_chat_visibility.FromIni(ini);
+	multiplayer.client_chat_name.FromIni(ini);
+	multiplayer.client_chat_crypt_key.FromIni(ini);
+	multiplayer.client_name_tag_mode.FromIni(ini);
 }
 
 void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
@@ -606,6 +645,26 @@ void Game_Config::WriteToStream(Filesystem_Stream::OutputStream& os) const {
 	player.font1_size.ToIni(os);
 	player.font2.ToIni(os);
 	player.font2_size.ToIni(os);
+
+	os << "\n";
+
+	/** MULTIPLAYER SECTION */
+	os << "[Multiplayer]\n";
+	multiplayer.server_auto_start.ToIni(os);
+	multiplayer.server_bind_address.ToIni(os);
+	multiplayer.server_bind_address_2.ToIni(os);
+	multiplayer.server_max_users.ToIni(os);
+	multiplayer.client_auto_connect.ToIni(os);
+	multiplayer.client_remote_address.ToIni(os);
+	multiplayer.client_socks5_address.ToIni(os);
+	multiplayer.client_crypt_key.ToIni(os);
+	multiplayer.client_chat_notifications.ToIni(os);
+	multiplayer.client_chat_immersive_mode.ToIni(os);
+	multiplayer.client_chat_splitscreen_mode.ToIni(os);
+	multiplayer.client_chat_visibility.ToIni(os);
+	multiplayer.client_chat_name.ToIni(os);
+	multiplayer.client_chat_crypt_key.ToIni(os);
+	multiplayer.client_name_tag_mode.ToIni(os);
 
 	os << "\n";
 }

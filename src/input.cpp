@@ -53,7 +53,21 @@ namespace Input {
 	int dir8;
 	std::unique_ptr<Source> source;
 
+	bool game_focused = true;
+	Input::KeyStatus raw_disabled;
+	std::string text_input;
+	std::string text_input_disabled;
+
 	bool wait_input = false;
+}
+
+bool Input::IsGameFocused() { return game_focused; }
+void Input::SetGameFocus(bool focused) {
+	game_focused = focused;
+	// prevent external inputs from being readable by game on the frame focus is switched (and vice versa)
+	if (game_focused) {
+		ResetKeys();
+	}
 }
 
 bool Input::IsWaitingInput() { return wait_input; }
@@ -119,6 +133,8 @@ void Input::Update() {
 		bool pressed = pressed_buttons[i];
 		UpdateButton(i, pressed);
 	}
+
+	text_input = source->GetTextInput();
 
 	auto& directions = source->GetDirectionMappings();
 
@@ -197,6 +213,8 @@ void Input::ResetKeys() {
 	dir4 = Direction::NONE;
 	dir8 = Direction::NONE;
 
+	text_input = "";
+
 	// TODO: we want Input to be agnostic to where the button
 	// presses are coming from, and if there's a UI at all.
 	// Move this into the callers?
@@ -245,72 +263,92 @@ void Input::ResetAllMappings() {
 	mappings = GetDefaultButtonMappings();
 }
 
+/**
+ * pressed: press_time > 0
+ * triggered: press_time == 1
+ * repeated: press_time == 1 || press_time > start_repeat_time_23 and divide into repeat_time_4
+ * released: pressed == false && press_time > 0
+ */
+
 bool Input::IsPressed(InputButton button) {
 	assert(!IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	WaitInput(true);
 	return press_time[button] > 0;
 }
 
 bool Input::IsTriggered(InputButton button) {
 	assert(!IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	WaitInput(true);
 	return triggered[button];
 }
 
 bool Input::IsRepeated(InputButton button) {
 	assert(!IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	WaitInput(true);
 	return repeated[button];
 }
 
 bool Input::IsReleased(InputButton button) {
 	assert(!IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	WaitInput(false);
 	return released[button];
 }
 
 bool Input::IsSystemPressed(InputButton button) {
 	assert(IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	return press_time[button] > 0;
 }
 
 bool Input::IsSystemTriggered(InputButton button) {
 	assert(IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	return triggered[button];
 }
 
 bool Input::IsSystemRepeated(InputButton button) {
 	assert(IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	return repeated[button];
 }
 
 bool Input::IsSystemReleased(InputButton button) {
 	assert(IsSystemButton(button));
+	if (!IsGameFocused()) return false;
 	return released[button];
 }
 
 bool Input::IsAnyPressed() {
+	if (!IsGameFocused()) return false;
 	WaitInput(true);
 	return std::find_if(press_time.begin(), press_time.end(),
 						[](int t) {return t > 0;}) != press_time.end();
 }
 
 bool Input::IsAnyTriggered() {
+	if (!IsGameFocused()) return false;
 	WaitInput(true);
 	return triggered.any();
 }
 
 bool Input::IsAnyRepeated() {
+	if (!IsGameFocused()) return false;
 	WaitInput(true);
 	return repeated.any();
 }
 
 bool Input::IsAnyReleased() {
+	if (!IsGameFocused()) return false;
 	WaitInput(false);
 	return released.any();
 }
 
 std::vector<Input::InputButton> Input::GetAllPressed() {
+	if (!IsGameFocused()) return std::vector<InputButton>();
 	WaitInput(true);
 	std::vector<InputButton> vector;
 	for (unsigned i = 0; i < BUTTON_COUNT; i++) {
@@ -321,6 +359,7 @@ std::vector<Input::InputButton> Input::GetAllPressed() {
 }
 
 std::vector<Input::InputButton> Input::GetAllTriggered() {
+	if (!IsGameFocused()) return std::vector<InputButton>();
 	WaitInput(true);
 	std::vector<InputButton> vector;
 	for (unsigned i = 0; i < BUTTON_COUNT; i++) {
@@ -331,6 +370,7 @@ std::vector<Input::InputButton> Input::GetAllTriggered() {
 }
 
 std::vector<Input::InputButton> Input::GetAllRepeated() {
+	if (!IsGameFocused()) return std::vector<InputButton>();
 	WaitInput(true);
 	std::vector<InputButton> vector;
 	for (unsigned i = 0; i < BUTTON_COUNT; i++) {
@@ -341,6 +381,7 @@ std::vector<Input::InputButton> Input::GetAllRepeated() {
 }
 
 std::vector<Input::InputButton> Input::GetAllReleased() {
+	if (!IsGameFocused()) return std::vector<InputButton>();
 	WaitInput(false);
 	std::vector<InputButton> vector;
 	for (unsigned i = 0; i < BUTTON_COUNT; i++) {
@@ -351,27 +392,66 @@ std::vector<Input::InputButton> Input::GetAllReleased() {
 }
 
 bool Input::IsRawKeyPressed(Input::Keys::InputKey key) {
+	if (!IsGameFocused()) return false;
 	return raw_pressed[key];
 }
 
 bool Input::IsRawKeyTriggered(Input::Keys::InputKey key) {
+	if (!IsGameFocused()) return false;
 	return raw_triggered[key];
 }
 
 bool Input::IsRawKeyReleased(Input::Keys::InputKey key) {
+	if (!IsGameFocused()) return false;
 	return raw_released[key];
 }
 
 const Input::KeyStatus& Input::GetAllRawPressed() {
+	if (!IsGameFocused()) return raw_disabled;
 	return raw_pressed;
 }
 
 const Input::KeyStatus& Input::GetAllRawTriggered() {
+	if (!IsGameFocused()) return raw_disabled;
 	return raw_triggered;
 }
 
 const Input::KeyStatus& Input::GetAllRawReleased() {
+	if (!IsGameFocused()) return raw_disabled;
 	return raw_released;
+}
+
+bool Input::IsExternalPressed(InputButton button) {
+	assert(!IsSystemButton(button));
+	if (IsGameFocused()) return false;
+	WaitInput(true);
+	return press_time[button] > 0;
+}
+
+bool Input::IsExternalTriggered(InputButton button) {
+	assert(!IsSystemButton(button));
+	if (IsGameFocused()) return false;
+	WaitInput(true);
+	return triggered[button];
+}
+
+bool Input::IsExternalRepeated(InputButton button) {
+	assert(!IsSystemButton(button));
+	if (IsGameFocused()) return false;
+	WaitInput(true);
+	return repeated[button];
+}
+
+bool Input::IsExternalReleased(InputButton button) {
+	assert(!IsSystemButton(button));
+	if (IsGameFocused()) return false;
+	WaitInput(false);
+	return released[button];
+}
+
+std::string& Input::GetExternalTextInput() {
+	if (IsGameFocused()) return text_input_disabled;
+	return text_input;
 }
 
 Point Input::GetMousePosition() {

@@ -143,6 +143,8 @@ struct AudioInterface {
 	int SE_GetGlobalVolume() const;
 	void SE_SetGlobalVolume(int volume);
 
+	void ToggleMute();
+
 	bool GetFluidsynthEnabled() const;
 	void SetFluidsynthEnabled(bool enable);
 
@@ -157,6 +159,10 @@ struct AudioInterface {
 
 protected:
 	Game_ConfigAudio cfg;
+
+	bool toggle_mute_flag = false;
+	int volume_se = 0;
+	int volume_bgm = 0;
 };
 
 struct EmptyAudio : public AudioInterface {

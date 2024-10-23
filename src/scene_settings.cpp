@@ -19,6 +19,7 @@
 #include "bitmap.h"
 #include "input.h"
 #include "game_system.h"
+#include "multiplayer/game_multiplayer.h"
 #include "cache.h"
 #include "input_buttons.h"
 #include "input_source.h"
@@ -659,6 +660,7 @@ bool Scene_Settings::SaveConfig(bool silent) {
 	cfg.audio = Audio().GetConfig();
 	cfg.input = Input::GetInputSource()->GetConfig();
 	cfg.player = Player::player_config;
+	cfg.multiplayer = GMI().GetConfig();
 
 	cfg.WriteToStream(cfg_out);
 

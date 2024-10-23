@@ -51,6 +51,8 @@
 #include "player.h"
 #include "compiler.h"
 
+#include "multiplayer/game_multiplayer.h"
+
 // Static variables.
 namespace {
 	template <typename T>
@@ -181,6 +183,8 @@ namespace {
 
 	FontRef default_gothic;
 	FontRef default_mincho;
+	FontRef name_text;
+	FontRef name_text_2;
 
 	struct ExFont final : public Font {
 		public:
@@ -627,6 +631,30 @@ void Font::SetDefault(FontRef new_default, bool use_mincho) {
 	}
 }
 
+FontRef Font::NameText() {
+	auto nametag_mode = GMI().GetNametagMode();
+
+	if (nametag_mode == Game_Multiplayer::NametagMode::COMPACT || nametag_mode == Game_Multiplayer::NametagMode::SLIM) {
+		if (nametag_mode == Game_Multiplayer::NametagMode::SLIM && name_text_2) {
+			return name_text_2;
+		}
+
+		if (name_text) {
+			return name_text;
+		}
+	}
+
+	return Default();
+}
+
+void Font::SetNameText(FontRef new_name_text, bool slim) {
+	if (!slim) {
+		name_text = new_name_text;
+	} else {
+		name_text_2 = new_name_text;
+	}
+}
+
 FontRef Font::CreateFtFont(Filesystem_Stream::InputStream is, int size, bool bold, bool italic) {
 #ifdef HAVE_FREETYPE
 	if (!is) {
@@ -678,9 +706,16 @@ void Font::ResetDefault() {
 #endif
 }
 
+void Font::ResetNameText() {
+	SetNameText(nullptr, false);
+	SetNameText(nullptr, true);
+}
+
 void Font::Dispose() {
 	SetDefault(nullptr, true);
 	SetDefault(nullptr, false);
+
+	ResetNameText();
 
 #ifdef HAVE_FREETYPE
 	if (library) {

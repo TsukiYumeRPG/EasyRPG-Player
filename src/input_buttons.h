@@ -85,6 +85,22 @@ namespace Input {
 		FAST_FORWARD_B,
 		TOGGLE_FULLSCREEN,
 		TOGGLE_ZOOM,
+
+		TOGGLE_MUTE,
+		TOGGLE_NOTIFICATIONS,
+		TOGGLE_CHAT,
+
+		KEY_UP,
+		KEY_DOWN,
+		KEY_LEFT,
+		KEY_RIGHT,
+		KEY_BACKSPACE,
+		KEY_RETURN,
+		KEY_C,
+		KEY_V,
+		KEY_CTRL,
+		KEY_ESCAPE,
+
 		BUTTON_COUNT
 	};
 
@@ -131,6 +147,22 @@ namespace Input {
 		"FAST_FORWARD_B",
 		"TOGGLE_FULLSCREEN",
 		"TOGGLE_ZOOM",
+
+		"TOGGLE_MUTE",
+		"TOGGLE_NOTIFICATIONS",
+		"TOGGLE_CHAT",
+
+		"KEY_UP",
+		"KEY_DOWN",
+		"KEY_LEFT",
+		"KEY_RIGHT",
+		"KEY_BACKSPACE",
+		"KEY_RETURN",
+		"KEY_C",
+		"KEY_V",
+		"KEY_CTRL",
+		"KEY_ESCAPE",
+
 		"BUTTON_COUNT");
 
 	constexpr auto kInputButtonHelp = lcf::makeEnumTags<InputButton>(
@@ -176,6 +208,22 @@ namespace Input {
 		"Run the game at x{} speed",
 		"Toggle Fullscreen mode",
 		"Toggle Window Zoom level",
+
+		"Toggle mute",
+		"Toggle notifications",
+		"Toggle ChatUi",
+
+		"Up Key",
+		"Down Key",
+		"Left Key",
+		"Right Key",
+		"Backspace Key",
+		"Return Key",
+		"C Key",
+		"V Key",
+		"Ctrl Key",
+		"Escape Key",
+
 		"Total Button Count");
 
 	/**
@@ -189,6 +237,7 @@ namespace Input {
 			case TAKE_SCREENSHOT:
 			case SHOW_LOG:
 			case TOGGLE_ZOOM:
+			case TOGGLE_MUTE:
 			case FAST_FORWARD_A:
 			case FAST_FORWARD_B:
 				return true;

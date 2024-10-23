@@ -26,6 +26,8 @@
 #include "game_clock.h"
 
 class MessageOverlay;
+class StatusTextOverlay;
+class DebugTextOverlay;
 class Scene;
 
 /**
@@ -61,6 +63,10 @@ namespace Graphics {
 	 * @return message overlay
 	 */
 	MessageOverlay& GetMessageOverlay();
+
+	StatusTextOverlay& GetStatusTextOverlay();
+
+	DebugTextOverlay& GetDebugTextOverlay();
 }
 
 #endif

@@ -111,6 +111,8 @@ __MACOSX
 
 # legacy
 /lib/liblcf/
+/lib/libuv/
+/lib/libsodium-cmake/
 .buildconfig
 
 # Android

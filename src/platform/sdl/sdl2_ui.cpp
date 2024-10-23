@@ -47,6 +47,11 @@
 #  include "platform/macos/macos_utils.h"
 #endif
 
+#ifdef EMSCRIPTEN
+#  include <emscripten.h>
+#  include "platform/emscripten/interface.h"
+#endif
+
 #ifdef SUPPORT_AUDIO
 #  include "sdl_audio.h"
 
@@ -168,7 +173,13 @@ Sdl2Ui::Sdl2Ui(long width, long height, const Game_Config& cfg) : BaseUi(cfg)
 #ifdef EMSCRIPTEN
 	SDL_SetHint(SDL_HINT_EMSCRIPTEN_ASYNCIFY, "0");
 	// Only handle keyboard events when the canvas has focus
+	// Prevent blocking the default behavior of events on the child element
+	//  sdl code: if (!keyElement) keyElement = EMSCRIPTEN_EVENT_TARGET_|>WINDOW<|
 	SDL_SetHint(SDL_HINT_EMSCRIPTEN_KEYBOARD_ELEMENT, "#canvas");
+#endif
+
+#ifdef _WIN32
+	SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 #endif
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -179,6 +190,13 @@ Sdl2Ui::Sdl2Ui(long width, long height, const Game_Config& cfg) : BaseUi(cfg)
 			cfg.video.window_zoom.Get(),
 			cfg.video.fullscreen.Get(),
 			cfg.video.vsync.Get());
+
+#ifdef EMSCRIPTEN
+	if (!vcfg.vsync.Get()) {
+		emscripten_set_main_loop_timing(EM_TIMING_SETTIMEOUT,
+			vcfg.fps_limit.Get() > 0 ? 1000 / vcfg.fps_limit.Get() : 0);
+	}
+#endif
 
 	SetTitle(GAME_TITLE);
 
@@ -410,7 +428,8 @@ bool Sdl2Ui::RefreshDisplayMode() {
 			Output::Debug("SDL_GetRendererInfo failed : {}", SDL_GetError());
 		}
 
-		vsync = rinfo.flags & SDL_RENDERER_PRESENTVSYNC;
+		if (vsync && !(rinfo.flags & SDL_RENDERER_PRESENTVSYNC))
+			vsync = false;
 		SetFrameRateSynchronized(vsync);
 
 		if (texture_format == SDL_PIXELFORMAT_UNKNOWN) {
@@ -495,8 +514,6 @@ void Sdl2Ui::ToggleFullscreen() {
 	} else {
 		current_display_mode.flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 		SDL_GetWindowPosition(sdl_window, &window_mode_metrics.x, &window_mode_metrics.y);
-		window_mode_metrics.width = window.width;
-		window_mode_metrics.height = window.height;
 	}
 	EndDisplayModeChange();
 }
@@ -573,7 +590,19 @@ void Sdl2Ui::ToggleVsync() {
 	// Modifying vsync requires recreating the renderer
 	vcfg.vsync.Toggle();
 
+#ifdef EMSCRIPTEN
+	int err = 0;
+	if (vcfg.vsync.Get()) {
+		// render at every vsync
+		err = emscripten_set_main_loop_timing(EM_TIMING_RAF, 1);
+	} else {
+		err = emscripten_set_main_loop_timing(EM_TIMING_SETTIMEOUT,
+			vcfg.fps_limit.Get() > 0 ? 1000 / vcfg.fps_limit.Get() : 0);
+	}
+	if (!err) {
+#else
 	if (SDL_RenderSetVSync(sdl_renderer, int(vcfg.vsync.Get())) == 0) {
+#endif
 		current_display_mode.vsync = vcfg.vsync.Get();
 		SetFrameRateSynchronized(vcfg.vsync.Get());
 	} else {
@@ -606,6 +635,9 @@ void Sdl2Ui::UpdateDisplay() {
 	if (window.size_changed && window.width > 0 && window.height > 0) {
 		// Based on SDL2 function UpdateLogicalSize
 		window.size_changed = false;
+
+		window_mode_metrics.width = window.width;
+		window_mode_metrics.height = window.height;
 
 		float width_float = static_cast<float>(window.width);
 		float height_float = static_cast<float>(window.height);
@@ -694,6 +726,57 @@ void Sdl2Ui::UpdateDisplay() {
 	SDL_RenderPresent(sdl_renderer);
 }
 
+std::string Sdl2Ui::GetClipboardText() {
+#ifndef EMSCRIPTEN
+	char* c_str = SDL_GetClipboardText();
+	std::string str(c_str);
+	SDL_free(c_str);
+	return str;
+#else
+	return Emscripten_Interface::GetClipboardText();
+#endif
+}
+
+void Sdl2Ui::SetClipboardText(std::string text) {
+#ifndef EMSCRIPTEN
+	SDL_SetClipboardText(text.c_str());
+#else
+	Emscripten_Interface::SetClipboardText(text);
+#endif
+}
+
+void Sdl2Ui::SetTextInputRect(int x, int y, int w, int h) {
+	SDL_Rect rect = {0, 0, 0, 0};
+	rect.x = x * window.scale + viewport.x;
+	rect.y = y * window.scale + viewport.y;
+	rect.w = w * window.scale;
+	rect.h = h * window.scale;
+#ifndef EMSCRIPTEN
+	SDL_SetTextInputRect(&rect);
+#else
+	double ratio = emscripten_get_device_pixel_ratio();
+	Emscripten_Interface::SetTextInputRect(
+			rect.x / ratio, rect.y / ratio,
+			rect.w / ratio, rect.h / ratio);
+#endif
+}
+
+void Sdl2Ui::StartTextInput() {
+#ifndef EMSCRIPTEN
+	SDL_StartTextInput();
+#else
+	Emscripten_Interface::StartTextInput();
+#endif
+}
+
+void Sdl2Ui::StopTextInput() {
+#ifndef EMSCRIPTEN
+	SDL_StopTextInput();
+#else
+	Emscripten_Interface::StopTextInput();
+#endif
+}
+
 void Sdl2Ui::SetTitle(const std::string &title) {
 	SDL_SetWindowTitle(sdl_window, title.c_str());
 }
@@ -741,6 +824,10 @@ void Sdl2Ui::ProcessEvent(SDL_Event &evnt) {
 			ProcessKeyUpEvent(evnt);
 			return;
 
+		case SDL_TEXTINPUT:
+			ProcessTextInputEvent(evnt);
+			return;
+
 		case SDL_MOUSEMOTION:
 			ProcessMouseMotionEvent(evnt);
 			return;
@@ -782,7 +869,9 @@ void Sdl2Ui::ProcessEvent(SDL_Event &evnt) {
 void Sdl2Ui::ProcessWindowEvent(SDL_Event &evnt) {
 	int state = evnt.window.event;
 
-	if (state == SDL_WINDOWEVENT_FOCUS_LOST) {
+	if (state == SDL_WINDOWEVENT_FOCUS_LOST
+			&& !Player::IsMultiplayerActive()
+			&& !vcfg.no_pause_when_focus_lost.Get()) {
 		auto cfg = vcfg;
 		vGetConfig(cfg);
 		if (!cfg.pause_when_focus_lost.Get()) {
@@ -808,6 +897,19 @@ void Sdl2Ui::ProcessWindowEvent(SDL_Event &evnt) {
 		ResetKeys();
 
 		return;
+	} else if (!vcfg.no_pause_when_focus_lost.Get()) {
+		if (state == SDL_WINDOWEVENT_FOCUS_LOST) {
+			old_focused_fps_limit = vcfg.fps_limit.Get();
+			old_frame_rate_synchronized = IsFrameRateSynchronized();
+			// keep multiplayer data receiving
+			SetFrameLimit(2);
+			SetFrameRateSynchronized(false);
+		} else if (state == SDL_WINDOWEVENT_FOCUS_GAINED) {
+			if (old_focused_fps_limit != -1)
+				SetFrameLimit(old_focused_fps_limit);
+			if (old_frame_rate_synchronized)
+				SetFrameRateSynchronized(old_frame_rate_synchronized);
+		}
 	}
 
 #if defined(USE_MOUSE_OR_TOUCH) && defined(SUPPORT_MOUSE_OR_TOUCH)
@@ -860,6 +962,12 @@ void Sdl2Ui::ProcessKeyUpEvent(SDL_Event &evnt) {
 #else
 	/* unused */
 	(void) evnt;
+#endif
+}
+
+void Sdl2Ui::ProcessTextInputEvent(SDL_Event &evnt) {
+#ifndef EMSCRIPTEN
+	text_input_buffer += evnt.text.text;
 #endif
 }
 
@@ -1290,10 +1398,7 @@ void Sdl2Ui::vGetConfig(Game_ConfigVideo& cfg) const {
 #ifdef EMSCRIPTEN
 	// Fullscreen is handled by the browser
 	cfg.fullscreen.SetOptionVisible(false);
-	cfg.fps_limit.SetOptionVisible(false);
 	cfg.window_zoom.SetOptionVisible(false);
-	// Toggling this freezes the web player
-	cfg.vsync.SetOptionVisible(false);
 	cfg.pause_when_focus_lost.Lock(false);
 	cfg.pause_when_focus_lost.SetOptionVisible(false);
 #elif defined(__WIIU__)

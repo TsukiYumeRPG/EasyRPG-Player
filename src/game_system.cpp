@@ -19,6 +19,7 @@
 #include <fstream>
 #include <functional>
 #include "game_system.h"
+#include "multiplayer/game_multiplayer.h"
 #include "async_handler.h"
 #include "game_battle.h"
 #include "audio.h"
@@ -206,6 +207,7 @@ StringView Game_System::GetSystemName() {
 
 void Game_System::OnChangeSystemGraphicReady(FileRequestResult* result) {
 	Cache::SetSystemName(result->file);
+	GMI().SystemGraphicChanged(result->file);
 	bg_color = Cache::SystemOrBlack()->GetBackgroundColor();
 
 	Scene_Map* scene = (Scene_Map*)Scene::Find(Scene::Map).get();

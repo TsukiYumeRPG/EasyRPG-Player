@@ -122,6 +122,8 @@ struct Game_ConfigVideo {
 	ConfigParam<int> window_width{ "", "", "Video", "WindowWidth", -1 };
 	ConfigParam<int> window_height{ "", "", "Video", "WindowHeight", -1 };
 
+	BoolConfigParam no_pause_when_focus_lost{ "", "", "Video", "NoPauseWhenFocusLost", false };
+
 	void Hide();
 };
 
@@ -148,6 +150,25 @@ struct Game_ConfigInput {
 	void Hide();
 };
 
+struct Game_ConfigMultiplayer {
+	BoolConfigParam no_heartbeats{ "", "", "Multiplayer", "NoHeartbeats", false };
+	BoolConfigParam server_auto_start{ "", "", "Multiplayer", "ServerAutoStart", false };
+	StringConfigParam server_bind_address{ "", "", "Multiplayer", "ServerBindAddress", "[::]:6500" };
+	StringConfigParam server_bind_address_2{ "", "", "Multiplayer", "ServerBindAddress2", "" };
+	RangeConfigParam<int> server_max_users{ "", "", "Multiplayer", "ServerMaxUsers", 100, 0, 99999 };
+	BoolConfigParam client_auto_connect{ "", "", "Multiplayer", "ClientAutoConnect", false };
+	StringConfigParam client_remote_address{ "", "", "Multiplayer", "ClientRemoteAddress", "" };
+	StringConfigParam client_socks5_address{ "", "", "Multiplayer", "ClientSocks5Address", "" };
+	StringConfigParam client_crypt_key{ "", "", "Multiplayer", "ClientCryptKey", "" };
+	BoolConfigParam client_chat_notifications{ "", "", "Multiplayer", "ClientChatNotifications", true };
+	BoolConfigParam client_chat_immersive_mode{ "", "", "Multiplayer", "ClientChatImmersiveMode", false };
+	RangeConfigParam<int> client_chat_splitscreen_mode{ "", "", "Multiplayer", "ClientChatSplitScreenMode", 0, 0, 2 };
+	StringConfigParam client_chat_visibility{ "", "", "Multiplayer", "ClientChatVisibility", "" };
+	StringConfigParam client_chat_name{ "", "", "Multiplayer", "ClientChatName", "" };
+	StringConfigParam client_chat_crypt_key{ "", "", "Multiplayer", "ClientChatCryptKey", "" };
+	RangeConfigParam<int> client_name_tag_mode{ "", "", "Multiplayer", "ClientNametagMode", 1, 0, 3 };
+};
+
 struct Game_Config {
 	/** Gameplay subsystem options */
 	Game_ConfigPlayer player;
@@ -160,6 +181,9 @@ struct Game_Config {
 
 	/** Input subsystem options */
 	Game_ConfigInput input;
+
+	/** Multiplayer options */
+	Game_ConfigMultiplayer multiplayer;
 
 	/**
 	 * Create an application config. This first determines the config file path if any,

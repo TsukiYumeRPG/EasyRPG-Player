@@ -24,6 +24,7 @@
 #include <iomanip>
 #include <fstream>
 #include <memory>
+#include <csignal>
 
 #ifdef _WIN32
 #  include "platform/windows/utils.h"
@@ -54,6 +55,7 @@
 #include "game_screen.h"
 #include "game_pictures.h"
 #include "game_system.h"
+#include "multiplayer/game_multiplayer.h"
 #include "game_variables.h"
 #include "game_strings.h"
 #include "game_targets.h"
@@ -83,6 +85,8 @@
 #include "baseui.h"
 #include "game_clock.h"
 #include "message_overlay.h"
+#include "statustext_overlay.h"
+#include "multiplayer/chatui.h"
 #include "audio_midi.h"
 
 #ifdef __ANDROID__
@@ -92,6 +96,7 @@
 #ifndef EMSCRIPTEN
 // This is not used on Emscripten.
 #include "exe_reader.h"
+#include "multiplayer/server.h"
 #endif
 
 using namespace std::chrono_literals;
@@ -108,6 +113,7 @@ namespace Player {
 	bool reset_flag = false;
 	bool debug_flag;
 	bool hide_title_flag;
+	bool server_flag;
 	int load_game_id;
 	int party_x_position;
 	int party_y_position;
@@ -117,6 +123,7 @@ namespace Player {
 	std::string rtp_path;
 	bool no_audio_flag;
 	bool is_easyrpg_project;
+	bool is_paused;
 	std::string encoding;
 	std::string escape_symbol;
 	uint32_t escape_char;
@@ -129,6 +136,9 @@ namespace Player {
 	std::string replay_input_path;
 	std::string record_input_path;
 	std::string command_line;
+	bool toggle_mute_flag = false;
+	int volume_se = 0;
+	int volume_bgm = 0;
 	int speed_modifier_a;
 	int speed_modifier_b;
 	int rng_seed = -1;
@@ -177,6 +187,15 @@ void Player::Init(std::vector<std::string> args) {
 
 	Output::Debug("CLI: {}", command_line);
 
+#ifndef EMSCRIPTEN
+	if (server_flag) {
+		Server().SetConfig(cfg.multiplayer);
+		return;
+	}
+#endif
+
+	GMI().SetConfig(cfg.multiplayer);
+
 	Game_Clock::logClockInfo();
 	if (rng_seed < 0) {
 		Rand::SeedRandomNumberGenerator(time(NULL));
@@ -201,6 +220,19 @@ void Player::Init(std::vector<std::string> args) {
 }
 
 void Player::Run() {
+#ifndef EMSCRIPTEN
+	if (server_flag) {
+		auto signal_handler = [](int signal) {
+			Server().Stop();
+			Output::Debug("Server: signal={}", signal);
+		};
+		std::signal(SIGINT, signal_handler);
+		std::signal(SIGTERM, signal_handler);
+		Server().Start(true);
+		return;
+	}
+#endif
+
 	Instrumentation::Init("EasyRPG-Player");
 
 	Scene::Push(std::make_shared<Scene_Logo>());
@@ -251,6 +283,7 @@ void Player::MainLoop() {
 		Scene::instance->MainFunction();
 
 		Graphics::GetMessageOverlay().Update();
+		Graphics::GetStatusTextOverlay().Update();
 
 		++num_updates;
 	}
@@ -283,13 +316,19 @@ void Player::MainLoop() {
 }
 
 void Player::Pause() {
+#if PAUSE_AUDIO_WHEN_FOCUS_LOST
 	Audio().BGM_Pause();
+#endif
+	is_paused = true;
 }
 
 void Player::Resume() {
 	Input::ResetKeys();
+#if PAUSE_AUDIO_WHEN_FOCUS_LOST
 	Audio().BGM_Resume();
+#endif
 	Game_Clock::ResetFrame(Game_Clock::now());
+	is_paused = false;
 }
 
 void Player::UpdateInput() {
@@ -306,11 +345,14 @@ void Player::UpdateInput() {
 	if (Input::IsSystemTriggered(Input::TOGGLE_ZOOM)) {
 		DisplayUi->ToggleZoom();
 	}
+	if (Input::IsSystemTriggered(Input::TOGGLE_MUTE)) {
+		Audio().ToggleMute();
+	}
 	float speed = 1.0;
-	if (Input::IsSystemPressed(Input::FAST_FORWARD_A)) {
+	if (CUI().IsCheating() && Input::IsSystemPressed(Input::FAST_FORWARD_A)) {
 		speed = speed_modifier_a;
 	}
-	if (Input::IsSystemPressed(Input::FAST_FORWARD_B)) {
+	if (CUI().IsCheating() && Input::IsSystemPressed(Input::FAST_FORWARD_B)) {
 		speed = speed_modifier_b;
 	}
 	Game_Clock::SetGameSpeedFactor(speed);
@@ -342,6 +384,7 @@ void Player::Update(bool update_scene) {
 
 	Audio().Update();
 	Input::Update();
+	GMI().Update();
 
 	// Game events can query full screen status and change their behavior, so this needs to
 	// be a game key and not a system key.
@@ -369,6 +412,8 @@ void Player::Update(bool update_scene) {
 
 		Scene::instance->Update();
 	}
+
+	CUI().Update();
 
 #ifdef __ANDROID__
 	EpAndroid::invoke();
@@ -415,6 +460,10 @@ void Player::Exit() {
 	Output::Quit();
 	FileFinder::Quit();
 	DisplayUi.reset();
+	GMI().Quit();
+#ifndef EMSCRIPTEN
+	Server().Stop();
+#endif
 }
 
 Game_Config Player::ParseCommandLine() {
@@ -422,6 +471,7 @@ Game_Config Player::ParseCommandLine() {
 	hide_title_flag = false;
 	exit_flag = false;
 	reset_flag = false;
+	server_flag = false;
 	load_game_id = -1;
 	party_x_position = -1;
 	party_y_position = -1;
@@ -624,6 +674,10 @@ Game_Config Player::ParseCommandLine() {
 		}
 		if (cp.ParseNext(arg, 0, {"--no-rtp", "--disable-rtp"})) {
 			no_rtp_flag = true;
+			continue;
+		}
+		if (cp.ParseNext(arg, 0, "--server")) {
+			server_flag = true;
 			continue;
 		}
 		if (cp.ParseNext(arg, 1, "--rtp-path")) {
@@ -838,6 +892,8 @@ void Player::CreateGameObjects() {
 	if (Player::IsPatchKeyPatch()) {
 		Main_Data::game_ineluki->ExecuteScriptList(FileFinder::Game().FindFile("autorun.script"));
 	}
+
+	GMI().GameLoaded();
 }
 
 bool Player::ChangeResolution(int width, int height) {
@@ -857,6 +913,8 @@ bool Player::ChangeResolution(int width, int height) {
 	if (Main_Data::game_quit) {
 		Main_Data::game_quit->OnResolutionChange();
 	}
+
+	CUI().OnResolutionChange();
 
 	Output::Debug("Resolution changed to {}x{}", width, height);
 	return true;
@@ -1059,6 +1117,7 @@ void Player::LoadDatabase() {
 
 void Player::LoadFonts() {
 	Font::ResetDefault();
+	Font::ResetNameText();
 
 #ifdef HAVE_FREETYPE
 	// Look for bundled fonts
@@ -1078,6 +1137,16 @@ void Player::LoadFonts() {
 		if (ft) {
 			Font::SetDefault(ft, true);
 		}
+	}
+
+	auto name_text = FileFinder::OpenFont("NameText");
+	if (name_text) {
+		Font::SetNameText(Font::CreateFtFont(std::move(name_text), 11, false, false), false);
+	}
+
+	auto name_text_2 = FileFinder::OpenFont("NameText2");
+	if (name_text_2) {
+		Font::SetNameText(Font::CreateFtFont(std::move(name_text_2), 13, false, false), true);
 	}
 #endif
 }
@@ -1507,6 +1576,7 @@ Debug options:
  --test-play          Enable TestPlay (Debug) mode.
 
 Other options:
+ --server             Run dedicated server.
  -v, --version        Display program version and exit.
  -h, --help           Display this help and exit.
 
@@ -1567,6 +1637,10 @@ bool Player::IsCP1251() {
 	}
 
 	return (encoding == "ibm-5347_P100-1998" || encoding == "windows-1251" || encoding == "1251");
+}
+
+bool Player::IsMultiplayerActive() {
+	return GMI().IsActive();
 }
 
 int Player::EngineVersion() {

@@ -44,6 +44,7 @@
 #include "game_screen.h"
 #include "game_interpreter_control_variables.h"
 #include "game_windows.h"
+#include "multiplayer/game_multiplayer.h"
 #include "maniac_patch.h"
 #include "spriteset_map.h"
 #include "sprite_character.h"
@@ -1987,6 +1988,7 @@ bool Game_Interpreter::CommandPlaySound(lcf::rpg::EventCommand const& com) { // 
 	sound.balance = ValueOrVariableBitfield(com, 3, 3, 2);
 
 	Main_Data::game_system->SePlay(sound, true);
+	GMI().SePlayed(sound);
 	return true;
 }
 
@@ -2238,6 +2240,8 @@ bool Game_Interpreter::CommandChangeEventLocation(lcf::rpg::EventCommand const& 
 		const auto y = ValueOrVariable(com.parameters[1], com.parameters[3]);
 		event->MoveTo(event->GetMapId(), x, y);
 
+		GMI().EventLocationChanged(event_id, x, y);
+
 		// RPG2k3 feature
 		int direction = -1;
 		if (Player::IsRPG2k3Commands() && com.parameters.size() > 4) {
@@ -2280,7 +2284,8 @@ bool Game_Interpreter::CommandStoreTerrainID(lcf::rpg::EventCommand const& com) 
 	int x = ValueOrVariable(com.parameters[0], com.parameters[1]);
 	int y = ValueOrVariable(com.parameters[0], com.parameters[2]);
 	int var_id = com.parameters[3];
-	Main_Data::game_variables->Set(var_id, Game_Map::GetTerrainTag(x, y));
+	Main_Data::game_variables->Set(var_id,
+		GMI().GetTerrainTag(Game_Map::GetTerrainTag(x, y), x, y));
 	Game_Map::SetNeedRefreshForVarChange(var_id);
 	return true;
 }
@@ -2810,6 +2815,8 @@ bool Game_Interpreter::CommandShowPicture(lcf::rpg::EventCommand const& com) { /
 		}
 	}
 
+	GMI().PictureShown(pic_id, params);
+
 	return true;
 }
 
@@ -2927,6 +2934,8 @@ bool Game_Interpreter::CommandMovePicture(lcf::rpg::EventCommand const& com) { /
 		}
 	}
 
+	GMI().PictureMoved(pic_id, params);
+
 	if (wait)
 		SetupWait(params.duration);
 
@@ -2991,6 +3000,8 @@ bool Game_Interpreter::CommandErasePicture(lcf::rpg::EventCommand const& com) { 
 			}
 
 			Main_Data::game_pictures->Erase(i);
+
+			GMI().PictureErased(i);
 		}
 	} else {
 		PicPointerPatch::AdjustId(pic_id);
@@ -3000,6 +3011,8 @@ bool Game_Interpreter::CommandErasePicture(lcf::rpg::EventCommand const& com) { 
 		}
 
 		Main_Data::game_pictures->Erase(pic_id);
+
+		GMI().PictureErased(pic_id);
 	}
 
 	return true;
@@ -3011,6 +3024,8 @@ bool Game_Interpreter::CommandPlayerVisibility(lcf::rpg::EventCommand const& com
 	player->SetSpriteHidden(hidden);
 	// RPG_RT does this here.
 	player->ResetThrough();
+
+	GMI().MainPlayerChangedSpriteHidden(hidden);
 
 	return true;
 }

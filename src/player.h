@@ -293,6 +293,11 @@ namespace Player {
 	bool IsPatchKeyPatch();
 
 	/**
+	 * @return True when multiplayer is active
+	 */
+	bool IsMultiplayerActive();
+
+	/**
 	 * @return True when EasyRpg extensions are on
 	 */
 	bool HasEasyRpgExtensions();
@@ -326,6 +331,9 @@ namespace Player {
 
 	/** Hide Title flag, if true title scene will run without image and music. */
 	extern bool hide_title_flag;
+
+	/** Server flag, if true will run dedicated server. */
+	extern bool server_flag;
 
 	/** The width of the screen */
 	extern int screen_width;
@@ -368,6 +376,9 @@ namespace Player {
 
 	/** Is this project using EasyRPG files, or the RPG_RT format? */
 	extern bool is_easyrpg_project;
+
+	/** Is the player paused? */
+	extern bool is_paused;
 
 	/** Encoding used */
 	extern std::string encoding;

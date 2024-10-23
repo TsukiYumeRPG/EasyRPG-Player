@@ -28,6 +28,7 @@
 #include "game_actors.h"
 #include "game_interpreter.h"
 #include "game_system.h"
+#include "multiplayer/game_multiplayer.h"
 #include "main_data.h"
 #include "scene_settings.h"
 #include "game_map.h"
@@ -367,6 +368,8 @@ bool Scene::ReturnToTitleScene() {
 	if (!title_scene) {
 		return false;
 	}
+
+	GMI().MapQuit();
 
 	title_scene->SetDelayFrames(Scene::kReturnTitleDelayFrames);
 	Scene::PopUntil(Scene::Title);

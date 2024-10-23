@@ -29,6 +29,14 @@ public:
     static void RefreshScene();
 	static void TakeScreenshot();
 	static void Reset();
+
+	// IME & Clipboard support
+	static void StartTextInput();
+	static void StopTextInput();
+	static void SetTextInputRect(int x, int y, int w = 0, int h = 0);
+	static void UpdateTextInputBuffer(std::string text);
+	static std::string GetClipboardText();
+	static void SetClipboardText(std::string_view text);
 };
 
 class Emscripten_Interface_Private {
